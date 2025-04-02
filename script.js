@@ -1,78 +1,140 @@
-const cards = [
-    '🍎', '🍎', '🍊', '🍊',
-    '🍇', '🍇', '🍉', '🍉',
-    '🍋', '🍋', '🍓', '🍓'
-];
+// Slot machine game
+const symbols = ['🍒', '🍊', '🍇', '💎', '7'];
+let balance = 1000;
+let currentBet = 10;
+const reels = document.querySelectorAll('.reel');
+const spinButton = document.getElementById('spinButton');
+const betUpButton = document.getElementById('betUp');
+const betDownButton = document.getElementById('betDown');
+const balanceDisplay = document.getElementById('balance');
+const currentBetDisplay = document.getElementById('currentBet');
 
-let flippedCards = [];
-let attempts = 0;
-let score = 0;
+// Premie struktur basert på emoji
+const symbolPayouts = {
+    '💎': 10,  // Diamond gir 10 ganger bettet
+    '7': 7,    // 7 gir 7 ganger bettet
+    '🍇': 4,   // Grape gir 4 ganger bettet
+    '🍊': 3,   // Orange gir 3 ganger bettet
+    '🍒': 2    // Cherry gir 2 gang bettet
+};
 
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
+// Update display function
+function updateDisplay() {
+    balanceDisplay.textContent = `Balance: ${balance}`;
+    currentBetDisplay.textContent = `Bet: ${currentBet}`;
 }
 
-function createGameBoard() {
-    const gameBoard = document.getElementById('game-board');
-    const shuffledCards = shuffleArray([...cards]);
+// Function to update reel content
+function updateReel(reel, symbol) {
+    const reelContent = reel.querySelector('.reel-content');
+    reelContent.textContent = symbol;
+}
+
+// Function to animate reel
+function animateReel(reel, symbol) {
+    const reelContent = reel.querySelector('.reel-content');
     
-    shuffledCards.forEach(card => {
-        const cardElement = document.createElement('div');
-        cardElement.className = 'card';
-        cardElement.dataset.value = card;
-        cardElement.addEventListener('click', flipCard);
-        gameBoard.appendChild(cardElement);
-    });
-}
-
-function flipCard() {
-    if (flippedCards.length < 2 && !this.classList.contains('flipped')) {
-        this.classList.add('flipped');
-        this.textContent = this.dataset.value;
-        flippedCards.push(this);
-        attempts++;
-        document.getElementById('attempts').textContent = attempts;
+    // Snur i 3 sekunder
+    const duration = 3000;
+    const startTime = Date.now();
+    
+    function animate() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
         
-        if (flippedCards.length === 2) {
-            checkMatch();
+        // Beregn vinkel basert på progress
+        const angle = progress * 360 * 10; // Snurr 10 ganger
+        
+        // Vis et tilfeldig symbol mens det snurrer
+        if (progress < 0.9) { // Snurr i 90% av tiden
+            const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+            reelContent.textContent = randomSymbol;
+            reelContent.style.transform = `rotate(${angle}deg)`;
+        } else { // De siste 10% av tiden, vis endeposisjonen
+            reelContent.textContent = symbol;
+            reelContent.style.transform = 'rotate(0deg)';
+        }
+        
+        if (progress < 1) {
+            requestAnimationFrame(animate);
         }
     }
+    
+    animate();
 }
 
-function checkMatch() {
-    const [card1, card2] = flippedCards;
+// Check win function
+function checkWin(symbols) {
+    const uniqueSymbols = [...new Set(symbols)];
     
-    if (card1.dataset.value === card2.dataset.value) {
-        score += 10;
-        document.getElementById('score').textContent = score;
-        flippedCards = [];
-    } else {
-        setTimeout(() => {
-            card1.classList.remove('flipped');
-            card2.classList.remove('flipped');
-            card1.textContent = '';
-            card2.textContent = '';
-            flippedCards = [];
-        }, 1000);
+    if (uniqueSymbols.length === 1) { // Alle tre symboler er like
+        return { type: 'win', symbol: symbols[0] };
+    } else if (uniqueSymbols.length === 2) { // To symboler er like
+        const symbolCounts = {};
+        symbols.forEach(symbol => {
+            symbolCounts[symbol] = (symbolCounts[symbol] || 0) + 1;
+        });
+        const winningSymbol = Object.keys(symbolCounts).find(symbol => symbolCounts[symbol] === 2);
+        return { type: 'partial', symbol: winningSymbol };
+    } else { // Alle symboler er ulike
+        return { type: 'lose' };
     }
 }
 
-function restartGame() {
-    const gameBoard = document.getElementById('game-board');
-    gameBoard.innerHTML = '';
-    flippedCards = [];
-    attempts = 0;
-    score = 0;
-    document.getElementById('score').textContent = score;
-    document.getElementById('attempts').textContent = attempts;
-    createGameBoard();
+// Spin function
+function spin() {
+    if (balance < currentBet) {
+        return;
+    }
+
+    // Trekk bet
+    balance -= currentBet;
+    updateDisplay();
+
+    // Generer tilfeldige symboler
+    const randomSymbols = Array(3).fill().map(() => 
+        symbols[Math.floor(Math.random() * symbols.length)]
+    );
+
+    // Animer reeler
+    reels.forEach((reel, index) => {
+        setTimeout(() => {
+            animateReel(reel, randomSymbols[index]);
+        }, index * 500);
+    });
+
+    // Sjekk vinn
+    const result = checkWin(randomSymbols);
+    
+    if (result.type === 'win') {
+        const multiplier = symbolPayouts[result.symbol];
+        const winAmount = currentBet * multiplier;
+        balance += winAmount;
+    } else if (result.type === 'partial') {
+        const multiplier = symbolPayouts[result.symbol];
+        const winAmount = Math.floor((currentBet * multiplier) / 2);
+        balance += winAmount;
+    }
+
+    updateDisplay();
 }
 
-document.getElementById('restart-btn').addEventListener('click', restartGame);
+// Event listeners
+spinButton.addEventListener('click', spin);
 
-// Start the game
-createGameBoard();
+betUpButton.addEventListener('click', () => {
+    if (currentBet < 100) {
+        currentBet += 10;
+        updateDisplay();
+    }
+});
+
+betDownButton.addEventListener('click', () => {
+    if (currentBet > 10) {
+        currentBet -= 10;
+        updateDisplay();
+    }
+});
+
+// Initialize
+updateDisplay();
